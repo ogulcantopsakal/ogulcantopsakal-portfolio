@@ -9,21 +9,16 @@ const ICONS = {
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 6.5A2.5 2.5 0 0 1 4.5 4h15A2.5 2.5 0 0 1 22 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 2 17.5v-11zm2.2.3 7.2 5.2c.4.3.9.3 1.2 0l7.2-5.2a.9.9 0 0 0-.3-.8h-15a.9.9 0 0 0-.3.8z"/></svg>',
 };
 
-function probe(url) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => resolve(url);
-    img.onerror = () => resolve(null);
-    img.src = url;
-  });
+function headOk(url) {
+  return fetch(url, { method: "HEAD" }).then(
+    (res) => (res.ok ? url : null),
+    () => null
+  );
 }
 
 async function firstExisting(paths) {
-  for (const path of paths) {
-    const found = await probe(path);
-    if (found) return found;
-  }
-  return null;
+  const found = await Promise.all(paths.map(headOk));
+  return found.find(Boolean) || null;
 }
 
 function coverCandidates(slug) {
@@ -34,14 +29,22 @@ function coverCandidates(slug) {
 }
 
 async function galleryPaths(slug) {
-  const images = [];
-  for (let index = 1; index <= 48; index += 1) {
-    const name = String(index).padStart(2, "0");
-    const found = await firstExisting(
-      EXTS.map((ext) => `images/${slug}/${name}.${ext}`)
-    );
-    if (!found) break;
-    images.push(found);
+  const base = `images/${slug}/`;
+  const first = await firstExisting(EXTS.map((ext) => `${base}01.${ext}`));
+  if (!first) return [];
+  const ext = first.slice(first.lastIndexOf(".") + 1);
+  const images = [first];
+  let index = 2;
+  while (index <= 48) {
+    const urls = [];
+    for (let number = index; number <= Math.min(index + 11, 48); number += 1) {
+      urls.push(`${base}${String(number).padStart(2, "0")}.${ext}`);
+    }
+    const found = await Promise.all(urls.map(headOk));
+    const missing = found.indexOf(null);
+    images.push(...(missing === -1 ? found : found.slice(0, missing)));
+    if (missing !== -1) break;
+    index += 12;
   }
   return images;
 }
@@ -106,7 +109,10 @@ function renderChrome(currentId) {
   `;
 }
 
+let renderToken = 0;
+
 function renderHome() {
+  renderToken += 1;
   document.title = SITE.name;
   renderChrome("");
   const blocks = SITE.welcome.blocks
@@ -132,6 +138,7 @@ function studioName(role) {
 }
 
 function renderSection(section) {
+  renderToken += 1;
   document.title = `${section.title} — ${SITE.name}`;
   renderChrome(section.id);
   const cards = section.projects
@@ -170,36 +177,34 @@ function renderSection(section) {
 }
 
 async function renderProject(slug) {
+  const token = (renderToken += 1);
   const project = SITE.projects[slug];
   const section = sectionFor(slug);
   document.title = `${project.title} — ${SITE.name}`;
   renderChrome(section ? section.id : "");
-  document.querySelector("#main").innerHTML = `
-    <h1 class="page-title">${escapeHtml(project.title).toUpperCase()}</h1>
-    <div class="blocks project-copy">
-      <section class="block"><h2>Description</h2><div><p>Loading images…</p></div></section>
-    </div>
-  `;
+  const back = section
+    ? `<a class="back" href="#/${section.id}">← ${escapeHtml(section.title)}</a>`
+    : `<a class="back" href="#/">← Home</a>`;
+  const paint = (gallery) => {
+    document.querySelector("#main").innerHTML = `
+      <h1 class="page-title">${escapeHtml(project.title).toUpperCase()}</h1>
+      <div class="blocks project-copy">${projectBlocks(project, gallery)}</div>
+      ${back}
+    `;
+  };
 
+  paint(`<p class="empty-note">Loading images…</p>`);
   const images = await galleryPaths(slug);
+  if (token !== renderToken) return;
   const gallery = images.length
     ? `<div class="gallery">${images
         .map(
           (src) =>
-            `<button type="button" class="shot" data-full="${escapeHtml(src)}"><img src="${escapeHtml(src)}" alt="${escapeHtml(project.title)}" loading="lazy" decoding="async"></button>`
+            `<button type="button" class="shot" data-full="${escapeHtml(src)}"><img src="${escapeHtml(src)}" alt="${escapeHtml(project.title)}" decoding="async"></button>`
         )
         .join("")}</div>`
     : `<p class="empty-note">Add the pictures for this page to <code>images/${slug}/</code>. Use <code>cover.jpg</code> for the card and <code>01.jpg</code>, <code>02.jpg</code>, and so on for the page. png and webp work too.</p>`;
-
-  const back = section
-    ? `<a class="back" href="#/${section.id}">← ${escapeHtml(section.title)}</a>`
-    : `<a class="back" href="#/">← Home</a>`;
-
-  document.querySelector("#main").innerHTML = `
-    <h1 class="page-title">${escapeHtml(project.title).toUpperCase()}</h1>
-    <div class="blocks project-copy">${projectBlocks(project, gallery)}</div>
-    ${back}
-  `;
+  paint(gallery);
 }
 
 function route() {
