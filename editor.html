@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Edit portfolio</title>
+    <link rel="stylesheet" href="editor.css" />
+    <script>
+      if (location.hostname !== "127.0.0.1" && location.hostname !== "localhost") {
+        location.replace("index.html");
+      }
+    </script>
+  </head>
+  <body>
+    <header class="top">
+      <div>
+        <p class="eyebrow">Local editor</p>
+        <h1>Ogulcan Topsakal</h1>
+      </div>
+      <div class="top-actions">
+        <p id="status" class="status" role="status"></p>
+        <a href="index.html">View site</a>
+        <button id="save" type="button">Save</button>
+      </div>
+      <nav class="jump" aria-label="Editor sections">
+        <a href="#images">Images</a>
+        <a href="#add">Add</a>
+        <a href="#project-section">Projects</a>
+        <a href="#welcome-section">Welcome</a>
+        <a href="#links-section">Links</a>
+        <label class="jump-pick">Open
+          <select id="jump-project">
+            <option value="">Choose a project</option>
+          </select>
+        </label>
+      </nav>
+    </header>
+    <main>
+      <section id="images">
+        <details open>
+          <summary>Images still to add</summary>
+          <p class="note" id="todo-summary"></p>
+          <div id="todo"></div>
+        </details>
+      </section>
+      <section id="add">
+        <details>
+          <summary>Add a project</summary>
+          <form id="add-project" class="row">
+            <label>Title <input name="title" required placeholder="Yarn Maze" /></label>
+            <label>Section <select name="section"></select></label>
+            <label class="grow">Short text <input name="summary" placeholder="Optional" /></label>
+            <button type="submit">Add project</button>
+          </form>
+        </details>
+      </section>
+      <section id="project-section">
+        <h2>Projects</h2>
+        <div id="filters" class="filters"></div>
+        <div id="projects"></div>
+        <nav id="pager" class="pager" aria-label="Project pages"></nav>
+      </section>
+      <section id="welcome-section">
+        <details>
+          <summary>Welcome page</summary>
+          <form id="welcome" class="stack"></form>
+        </details>
+      </section>
+      <section id="links-section">
+        <details>
+          <summary>Links</summary>
+          <form id="links" class="stack"></form>
+        </details>
+      </section>
+    </main>
+    <script src="data.js"></script>
+    <script src="editor.js"></script>
+  </body>
+</html>
