@@ -21,11 +21,23 @@ async function firstExisting(paths) {
   return found.find(Boolean) || null;
 }
 
-function coverCandidates(slug) {
-  const paths = [];
-  for (const ext of EXTS) paths.push(`images/${slug}/cover.${ext}`);
-  for (const ext of EXTS) paths.push(`images/${slug}/01.${ext}`);
-  return paths;
+function loadImage(src) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve(src);
+    image.onerror = () => resolve(null);
+    image.src = src;
+  });
+}
+
+async function findCover(slug) {
+  for (const name of ["cover", "01"]) {
+    for (const ext of ["png", "jpg", "jpeg", "webp"]) {
+      const src = await loadImage(`images/${slug}/${name}.${ext}`);
+      if (src) return src;
+    }
+  }
+  return null;
 }
 
 async function galleryPaths(slug) {
@@ -100,6 +112,8 @@ function renderChrome(currentId) {
     })
     .join("");
   nav.innerHTML = sections;
+  document.querySelector(".tagline").textContent =
+    "Unity game developer, building gameplay systems since 2021.";
 
   const social = document.querySelector("#social");
   social.innerHTML = `
@@ -109,12 +123,226 @@ function renderChrome(currentId) {
   `;
 }
 
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function entryMarkup(slug, index) {
+  const project = SITE.projects[slug];
+  const studio = studioName(project.role);
+  const meta = [
+    studio ? `<span class="studio">${escapeHtml(studio)}</span>` : "",
+    project.year ? `<span class="year">${escapeHtml(project.year)}</span>` : "",
+  ].join("");
+  return `
+    <a class="entry" href="#/${slug}" data-studio="${escapeHtml(studio)}" data-year="${escapeHtml(project.year || "")}" style="--i:${index}">
+      <span class="entry-cover placeholder" data-frame="${slug}"></span>
+      <span class="entry-title">${escapeHtml(project.title)}</span>
+      <span class="entry-meta">${meta}</span>
+    </a>`;
+}
+
+const BACKDROP_MIN = 232;
+
+async function cutout(src) {
+  const image = new Image();
+  image.src = src;
+  await image.decode();
+  const scale = Math.min(1, 640 / image.naturalHeight);
+  const width = Math.round(image.naturalWidth * scale);
+  const height = Math.round(image.naturalHeight * scale);
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(image, 0, 0, width, height);
+  const frame = context.getImageData(0, 0, width, height);
+  const px = frame.data;
+  const isBackdrop = (p) =>
+    px[p * 4] > BACKDROP_MIN && px[p * 4 + 1] > BACKDROP_MIN && px[p * 4 + 2] > BACKDROP_MIN;
+
+  const cleared = new Uint8Array(width * height);
+  const stack = [];
+  for (let x = 0; x < width; x += 1) stack.push(x, (height - 1) * width + x);
+  for (let y = 0; y < height; y += 1) stack.push(y * width, y * width + width - 1);
+  while (stack.length) {
+    const p = stack.pop();
+    if (cleared[p] || !isBackdrop(p)) continue;
+    cleared[p] = 1;
+    px[p * 4 + 3] = 0;
+    const x = p % width;
+    if (x > 0) stack.push(p - 1);
+    if (x < width - 1) stack.push(p + 1);
+    if (p >= width) stack.push(p - width);
+    if (p < width * (height - 1)) stack.push(p + width);
+  }
+
+  let left = width, right = 0, top = height, bottom = 0;
+  for (let p = 0; p < width * height; p += 1) {
+    if (cleared[p]) continue;
+    const x = p % width;
+    const y = (p - x) / width;
+    const edge =
+      (x > 0 && cleared[p - 1]) || (x < width - 1 && cleared[p + 1]) ||
+      (y > 0 && cleared[p - width]) || (y < height - 1 && cleared[p + width]);
+    if (edge) {
+      const lightest = Math.min(px[p * 4], px[p * 4 + 1], px[p * 4 + 2]);
+      px[p * 4 + 3] = 255 - lightest;
+      px[p * 4] = px[p * 4 + 1] = px[p * 4 + 2] = 0;
+    }
+    if (x < left) left = x;
+    if (x > right) right = x;
+    if (y < top) top = y;
+    if (y > bottom) bottom = y;
+  }
+  if (right <= left || bottom <= top) return src;
+
+  context.putImageData(frame, 0, 0);
+  const cropped = document.createElement("canvas");
+  cropped.width = right - left + 1;
+  cropped.height = bottom - top + 1;
+  cropped.getContext("2d").drawImage(canvas, -left, -top);
+  const blob = await new Promise((resolve) => cropped.toBlob(resolve, "image/png"));
+  return blob ? URL.createObjectURL(blob) : src;
+}
+
+const cutouts = new Map();
+
+function cutoutFor(slug) {
+  if (!cutouts.has(slug)) {
+    cutouts.set(
+      slug,
+      findCover(slug).then((src) => (src ? cutout(src).catch(() => src) : null))
+    );
+  }
+  return cutouts.get(slug);
+}
+
+function loadCovers(slugs) {
+  for (const slug of slugs) {
+    cutoutFor(slug).then((src) => {
+      if (!src) return;
+      const frame = document.querySelector(`[data-frame="${slug}"]`);
+      if (!frame) return;
+      const image = new Image();
+      image.alt = "";
+      image.onload = () => frame.classList.add("ready");
+      image.src = src;
+      frame.classList.remove("placeholder");
+      frame.replaceChildren(image);
+    });
+  }
+}
+
+function indexMarkup(section, heading = "h2", lead = "") {
+  const entries = section.projects.map((slug, index) => entryMarkup(slug, index)).join("");
+  const title = `
+        <a href="#/${section.id}">${escapeHtml(section.title)}</a>
+        <span class="count">${section.projects.length}</span>`;
+  const headingHtml =
+    heading === "h1"
+      ? `<h1 class="index-heading">${title}</h1>`
+      : `<h2 class="index-heading">${title}</h2>`;
+  return `
+    <section class="index-block" id="${section.id}">
+      ${headingHtml}
+      ${lead}
+      <div class="index">${entries}</div>
+    </section>`;
+}
+
+function studiosOf(slugs) {
+  return [...new Set(slugs.map((slug) => studioName(SITE.projects[slug].role)).filter(Boolean))];
+}
+
+function yearsOf(slugs) {
+  return [...new Set(slugs.map((slug) => SITE.projects[slug].year).filter(Boolean))].sort().reverse();
+}
+
+function factsMarkup(sections) {
+  const slugs = sections.flatMap((section) => section.projects);
+  const facts = [
+    [slugs.length, "Games"],
+    ...sections.map((section) => [section.projects.length, section.title.replace(/^Mobile /, "")]),
+    [studiosOf(slugs).length, "Studios"],
+  ];
+  return `
+    <dl class="facts">
+      ${facts
+        .map(([value, label]) => `<div><dt>${escapeHtml(label)}</dt><dd data-count="${value}">${value}</dd></div>`)
+        .join("")}
+    </dl>`;
+}
+
+function chipGroup(name, label, values) {
+  const chips = ["", ...values]
+    .map(
+      (value) =>
+        `<button type="button" class="chip" data-filter="${name}" data-value="${escapeHtml(value)}" aria-pressed="${value === ""}">${escapeHtml(value || "All")}</button>`
+    )
+    .join("");
+  return `<div class="chip-group" role="group" aria-label="${label}"><span class="chip-label">${label}</span>${chips}</div>`;
+}
+
+function filtersMarkup(slugs) {
+  return `
+    <div class="filters">
+      ${chipGroup("studio", "Studio", studiosOf(slugs))}
+      ${chipGroup("year", "Year", yearsOf(slugs))}
+    </div>
+    <p class="filter-empty" hidden>No games match these filters.</p>`;
+}
+
+const filters = { studio: "", year: "" };
+
+function applyFilters() {
+  const main = document.querySelector("#main");
+  let shown = 0;
+  for (const block of main.querySelectorAll(".index-block:not(.about)")) {
+    let visible = 0;
+    for (const entry of block.querySelectorAll(".entry")) {
+      const match =
+        (!filters.studio || entry.dataset.studio === filters.studio) &&
+        (!filters.year || entry.dataset.year === filters.year);
+      entry.hidden = !match;
+      if (match) {
+        entry.style.setProperty("--i", visible);
+        visible += 1;
+      }
+    }
+    block.hidden = visible === 0;
+    block.querySelector(".count").textContent = visible;
+    shown += visible;
+  }
+  for (const chip of main.querySelectorAll(".chip")) {
+    chip.setAttribute("aria-pressed", String(filters[chip.dataset.filter] === chip.dataset.value));
+  }
+  const empty = main.querySelector(".filter-empty");
+  if (empty) empty.hidden = shown > 0;
+  main.classList.remove("refiltered");
+  void main.offsetWidth;
+  main.classList.add("refiltered");
+}
+
+function countUp() {
+  if (reducedMotion) return;
+  for (const node of document.querySelectorAll("[data-count]")) {
+    const target = Number(node.dataset.count);
+    const start = performance.now();
+    const step = (now) => {
+      const progress = Math.min(1, (now - start) / 900);
+      node.textContent = Math.round(target * (1 - Math.pow(1 - progress, 3)));
+      if (progress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+}
+
 let renderToken = 0;
 
 function renderHome() {
   renderToken += 1;
   document.title = SITE.name;
   renderChrome("");
+  const indexes = publicSections().map((section) => indexMarkup(section)).join("");
   const blocks = SITE.welcome.blocks
     .map(
       (block) => `
@@ -125,11 +353,20 @@ function renderHome() {
     )
     .join("");
 
+  const sections = publicSections();
+  filters.studio = "";
+  filters.year = "";
   document.querySelector("#main").innerHTML = `
-    <h1 class="welcome-title">${escapeHtml(SITE.welcome.title)}</h1>
-    <div class="blocks">${blocks}</div>
-    <a class="back" href="#/">↑ Back to Top</a>
+    ${factsMarkup(sections)}
+    ${filtersMarkup(sections.flatMap((section) => section.projects))}
+    ${indexes}
+    <section class="index-block about">
+      <h2 class="index-heading">About</h2>
+      <div class="blocks">${blocks}</div>
+    </section>
   `;
+  loadCovers(sections.flatMap((section) => section.projects));
+  countUp();
 }
 
 function studioName(role) {
@@ -141,39 +378,19 @@ function renderSection(section) {
   renderToken += 1;
   document.title = `${section.title} — ${SITE.name}`;
   renderChrome(section.id);
-  const cards = section.projects
-    .map((slug) => {
-      const project = SITE.projects[slug];
-      return `
-        <a class="card" href="#/${slug}" data-slug="${slug}">
-          <div class="frame placeholder" data-frame="${slug}"><span>No image yet</span></div>
-          <h2>${escapeHtml(project.title)}</h2>
-          ${studioName(project.role) ? `<p class="studio">${escapeHtml(studioName(project.role))}</p>` : ""}
-          ${project.year ? `<p class="year">${escapeHtml(project.year)}</p>` : ""}
-        </a>`;
-    })
-    .join("");
-
   const empty = section.projects.length
     ? ""
     : `<p class="empty-note">No pages in this section yet. Add them in the editor.</p>`;
 
+  filters.studio = "";
+  filters.year = "";
+  const filterBar = section.projects.length > 1 ? filtersMarkup(section.projects) : "";
   document.querySelector("#main").innerHTML = `
-    <h1 class="page-title">${escapeHtml(section.title).toUpperCase()}</h1>
-    <div class="cards">${cards}</div>
+    ${section.projects.length ? indexMarkup(section, "h1", filterBar) : `<h1 class="page-title">${escapeHtml(section.title)}</h1>`}
     ${empty}
-    <a class="back" href="#/">↑ Back to Top</a>
+    <a class="back" href="#/">← All work</a>
   `;
-
-  for (const slug of section.projects) {
-    firstExisting(coverCandidates(slug)).then((src) => {
-      if (!src) return;
-      const frame = document.querySelector(`[data-frame="${slug}"]`);
-      if (!frame) return;
-      frame.classList.remove("placeholder");
-      frame.innerHTML = `<img src="${src}" alt="${escapeHtml(SITE.projects[slug].title)}" loading="lazy" decoding="async">`;
-    });
-  }
+  loadCovers(section.projects);
 }
 
 async function renderProject(slug) {
@@ -187,7 +404,7 @@ async function renderProject(slug) {
     : `<a class="back" href="#/">← Home</a>`;
   const paint = (gallery) => {
     document.querySelector("#main").innerHTML = `
-      <h1 class="page-title">${escapeHtml(project.title).toUpperCase()}</h1>
+      <h1 class="page-title">${escapeHtml(project.title)}</h1>
       <div class="blocks project-copy">${projectBlocks(project, gallery)}</div>
       ${back}
     `;
@@ -252,6 +469,12 @@ lightbox.addEventListener("close", () => {
 });
 
 document.addEventListener("click", (event) => {
+  const chip = event.target.closest(".chip");
+  if (chip) {
+    filters[chip.dataset.filter] = chip.dataset.value;
+    applyFilters();
+    return;
+  }
   const shot = event.target.closest(".shot");
   if (shot) {
     lightboxShots = [...shot.closest(".gallery").querySelectorAll(".shot")];

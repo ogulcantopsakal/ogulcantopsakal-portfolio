@@ -123,21 +123,21 @@ const SITE = {
     "drop-jelly": {
       "title": "Drop Jelly",
       "summary": "Drop Jelly is a colorful, physics-driven puzzle game I developed while working with SuperMesh Games. The core gameplay revolves around dropping and merging jelly blocks to create higher-value pieces, combining spatial strategy with satisfying chain reactions.\n\nI contributed to the full gameplay experience, including core mechanics, level design systems, and progression balancing. The game emphasizes simple-to-learn mechanics with increasing complexity, supported by power-ups and varied level objectives to maintain long-term engagement.\n\nWith its vibrant visuals and responsive feel, Drop Jelly focuses on delivering a polished and addictive puzzle loop built around timing, placement, and strategic planning.",
-      "role": "Mobile / Puzzle",
+      "role": "SuperMesh Games · Mobile / Puzzle",
       "year": "2024",
       "link": "https://apps.apple.com/us/app/drop-jelly/id6476603587"
     },
     "gun-assembly": {
       "title": "Gun Assembly",
       "summary": "It is an idle mobile game where you modify your weapon by combining and repairing weapon parts, and earn money by smashing sweet objects that come your way.\n\nApp Store Link",
-      "role": "Mobile / Idle",
+      "role": "SuperMesh Games · Mobile / Idle",
       "year": "2022",
       "link": "https://apps.apple.com/us/app/gun-assembly/id6444002089"
     },
     "color-guys": {
       "title": "Color Guys",
       "summary": "While painting the floors, you should also carry paint capsules to the houses to pass levels. You can upgrade your own character with the money you earn. You can exchange paint capsules to earn more money.",
-      "role": "Mobile / Arcade Idle",
+      "role": "SuperMesh Games · Mobile / Arcade Idle",
       "year": "2022",
       "link": "https://apps.apple.com/us/app/color-guys/id1612669134"
     },
@@ -172,7 +172,7 @@ const SITE = {
     "filled-numbers": {
       "title": "Filled Numbers",
       "summary": "Filled Numbers is a logic-based spatial puzzle game where players place numbered blocks on a grid to match exact counts. Each number on a block indicates how many tiles it must occupy. The challenge lies in fitting all blocks perfectly within the board's constraints without overlaps or gaps.",
-      "role": "SuperMesh Games (Prototype) · Mobile / Puzzle",
+      "role": "SuperMesh Games · Mobile / Puzzle",
       "year": "2025"
     },
     "token-sort": {
