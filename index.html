@@ -23,7 +23,13 @@
     <dialog class="lightbox">
       <button type="button" class="lightbox-close" aria-label="Close">×</button>
       <button type="button" class="lightbox-prev" aria-label="Previous">‹</button>
-      <img alt="" draggable="false" />
+      <div class="lightbox-viewport">
+        <div class="lightbox-track">
+          <div class="lightbox-slide"><img class="lightbox-side" alt="" draggable="false"></div>
+          <div class="lightbox-slide"><img class="lightbox-current" alt="" draggable="false"></div>
+          <div class="lightbox-slide"><img class="lightbox-side" alt="" draggable="false"></div>
+        </div>
+      </div>
       <button type="button" class="lightbox-next" aria-label="Next">›</button>
       <p class="lightbox-count" aria-live="polite"></p>
     </dialog>

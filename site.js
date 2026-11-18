@@ -279,13 +279,13 @@ function chipGroup(name, label, values) {
         `<button type="button" class="chip" data-filter="${name}" data-value="${escapeHtml(value)}" aria-pressed="${value === ""}">${escapeHtml(value || "All")}</button>`
     )
     .join("");
-  return `<div class="chip-group" role="group" aria-label="${label}"><span class="chip-label">${label}</span>${chips}</div>`;
+  return `<div class="chip-group" role="group" aria-label="${label}"><span class="chip-label">${label}</span><div class="chips">${chips}</div></div>`;
 }
 
 function filtersMarkup(slugs) {
   return `
     <div class="filters">
-      <label class="search">Search <input type="search" placeholder="Game name" aria-label="Search games"></label>
+      <label class="search"><span>Search</span><input type="search" placeholder="Game name" aria-label="Search games"></label>
       ${chipGroup("studio", "Studio", studiosOf(slugs))}
       ${chipGroup("year", "Year", yearsOf(slugs))}
     </div>
@@ -454,7 +454,9 @@ function route() {
 }
 
 const lightbox = document.querySelector(".lightbox");
-const lightboxImage = lightbox.querySelector("img");
+const lightboxTrack = lightbox.querySelector(".lightbox-track");
+const lightboxSlides = [...lightbox.querySelectorAll(".lightbox-slide img")];
+const lightboxImage = lightbox.querySelector(".lightbox-current");
 const lightboxCount = lightbox.querySelector(".lightbox-count");
 let lightboxShots = [];
 let lightboxIndex = 0;
@@ -463,22 +465,60 @@ let lightboxScroll = 0;
 let swipe = null;
 let ignoreLightboxClick = false;
 const SWIPE_DISTANCE = 56;
+const TRACK_CENTER = "translateX(-33.333%)";
+
+function shotAt(offset) {
+  const index = (lightboxIndex + offset + lightboxShots.length) % lightboxShots.length;
+  return lightboxShots[index];
+}
+
+function placeTrack(transform) {
+  lightboxTrack.style.transform = transform;
+}
+
+function paintSlides() {
+  [-1, 0, 1].forEach((offset, position) => {
+    const shot = shotAt(offset);
+    const image = lightboxSlides[position];
+    image.src = shot.dataset.full;
+    image.alt = offset === 0 ? shot.querySelector("img").alt : "";
+  });
+  lightboxCount.textContent = `${lightboxIndex + 1} / ${lightboxShots.length}`;
+  lightbox.classList.toggle("single", lightboxShots.length < 2);
+}
 
 function showLightbox(index) {
   lightboxIndex = (index + lightboxShots.length) % lightboxShots.length;
-  const shot = lightboxShots[lightboxIndex];
-  lightboxImage.src = shot.dataset.full;
-  lightboxImage.alt = shot.querySelector("img").alt;
-  lightboxCount.textContent = `${lightboxIndex + 1} / ${lightboxShots.length}`;
-  lightbox.classList.toggle("single", lightboxShots.length < 2);
+  lightbox.classList.add("instant");
+  paintSlides();
+  placeTrack(TRACK_CENTER);
   if (!lightbox.open) {
     lightboxScroll = window.scrollY;
     lightbox.showModal();
   }
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => lightbox.classList.remove("instant"));
+  });
+}
+
+function slideLightbox(direction) {
+  lightbox.classList.remove("dragging");
+  void lightboxTrack.offsetWidth;
+  if (!direction) {
+    placeTrack(TRACK_CENTER);
+    return;
+  }
+  placeTrack(direction > 0 ? "translateX(-66.666%)" : "translateX(0)");
+  const finish = (event) => {
+    if (event && event.target !== lightboxTrack) return;
+    lightboxTrack.removeEventListener("transitionend", finish);
+    showLightbox(lightboxIndex + direction);
+  };
+  lightboxTrack.addEventListener("transitionend", finish);
 }
 
 lightbox.addEventListener("close", () => {
-  lightboxImage.style.transform = "";
+  placeTrack(TRACK_CENTER);
   window.scrollTo(0, lightboxScroll);
 });
 
@@ -494,18 +534,34 @@ lightbox.addEventListener("pointermove", (event) => {
   const dy = event.clientY - swipe.y;
   if (Math.abs(dx) < 6 || Math.abs(dx) < Math.abs(dy)) return;
   lightbox.classList.add("dragging");
-  lightboxImage.style.transform = `translateX(${dx}px)`;
+  placeTrack(`translateX(calc(-33.333% + ${dx}px))`);
 });
 
 function endSwipe(event, commit) {
   if (!swipe || event.pointerId !== swipe.id) return;
   const dx = event.clientX - swipe.x;
-  lightbox.classList.remove("dragging");
-  lightboxImage.style.transform = "";
-  if (commit && Math.abs(dx) > 10) ignoreLightboxClick = true;
-  if (commit && dx <= -SWIPE_DISTANCE) showLightbox(lightboxIndex + 1);
-  else if (commit && dx >= SWIPE_DISTANCE) showLightbox(lightboxIndex - 1);
   swipe = null;
+  if (commit && Math.abs(dx) > 10) ignoreLightboxClick = true;
+  const direction = commit && dx <= -SWIPE_DISTANCE ? 1 : commit && dx >= SWIPE_DISTANCE ? -1 : 0;
+  lightbox.classList.remove("dragging");
+
+  if (!direction) {
+    void lightboxTrack.offsetWidth;
+    placeTrack(TRACK_CENTER);
+    return;
+  }
+
+  const width = lightbox.querySelector(".lightbox-viewport").clientWidth;
+  const parked = direction > 0 ? dx + width : dx - width;
+  lightbox.classList.add("instant");
+  lightboxIndex = (lightboxIndex + direction + lightboxShots.length) % lightboxShots.length;
+  paintSlides();
+  placeTrack(`translateX(calc(-33.333% + ${parked}px))`);
+  void lightboxTrack.offsetWidth;
+  requestAnimationFrame(() => {
+    lightbox.classList.remove("instant");
+    placeTrack(TRACK_CENTER);
+  });
 }
 
 lightbox.addEventListener("pointerup", (event) => endSwipe(event, true));
@@ -569,14 +625,14 @@ document.addEventListener("click", (event) => {
     return;
   }
   if (event.target.closest(".lightbox-close") || event.target === lightbox) lightbox.close();
-  if (event.target.closest(".lightbox-prev")) showLightbox(lightboxIndex - 1);
-  if (event.target.closest(".lightbox-next")) showLightbox(lightboxIndex + 1);
+  if (event.target.closest(".lightbox-prev")) slideLightbox(-1);
+  if (event.target.closest(".lightbox-next")) slideLightbox(1);
 });
 
 document.addEventListener("keydown", (event) => {
   if (!lightbox.open || lightboxShots.length < 2) return;
-  if (event.key === "ArrowLeft") showLightbox(lightboxIndex - 1);
-  if (event.key === "ArrowRight") showLightbox(lightboxIndex + 1);
+  if (event.key === "ArrowLeft") slideLightbox(-1);
+  if (event.key === "ArrowRight") slideLightbox(1);
 });
 
 window.addEventListener("hashchange", () => {
