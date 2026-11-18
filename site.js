@@ -133,7 +133,7 @@ function entryMarkup(slug, index) {
     project.year ? `<span class="year">${escapeHtml(project.year)}</span>` : "",
   ].join("");
   return `
-    <a class="entry" href="#/${slug}" data-studio="${escapeHtml(studio)}" data-year="${escapeHtml(project.year || "")}" style="--i:${index}">
+    <a class="entry" href="#/${slug}" data-title="${escapeHtml(project.title)}" data-studio="${escapeHtml(studio)}" data-year="${escapeHtml(project.year || "")}" style="--i:${index}">
       <span class="entry-cover placeholder" data-frame="${slug}"></span>
       <span class="entry-title">${escapeHtml(project.title)}</span>
       <span class="entry-meta">${meta}</span>
@@ -285,21 +285,23 @@ function chipGroup(name, label, values) {
 function filtersMarkup(slugs) {
   return `
     <div class="filters">
+      <label class="search">Search <input type="search" placeholder="Game name" aria-label="Search games"></label>
       ${chipGroup("studio", "Studio", studiosOf(slugs))}
       ${chipGroup("year", "Year", yearsOf(slugs))}
     </div>
-    <p class="filter-empty" hidden>No games match these filters.</p>`;
+    <p class="filter-empty" hidden>No games match.</p>`;
 }
 
-const filters = { studio: "", year: "" };
+const filters = { studio: "", year: "", query: "" };
 
-function applyFilters() {
+function applyFilters({ animate = true } = {}) {
   const main = document.querySelector("#main");
   let shown = 0;
   for (const block of main.querySelectorAll(".index-block:not(.about)")) {
     let visible = 0;
     for (const entry of block.querySelectorAll(".entry")) {
       const match =
+        (!filters.query || entry.dataset.title.toLowerCase().includes(filters.query)) &&
         (!filters.studio || entry.dataset.studio === filters.studio) &&
         (!filters.year || entry.dataset.year === filters.year);
       entry.hidden = !match;
@@ -317,6 +319,7 @@ function applyFilters() {
   }
   const empty = main.querySelector(".filter-empty");
   if (empty) empty.hidden = shown > 0;
+  if (!animate) return;
   main.classList.remove("refiltered");
   void main.offsetWidth;
   main.classList.add("refiltered");
@@ -356,6 +359,7 @@ function renderHome() {
   const sections = publicSections();
   filters.studio = "";
   filters.year = "";
+  filters.query = "";
   document.querySelector("#main").innerHTML = `
     ${factsMarkup(sections)}
     ${filtersMarkup(sections.flatMap((section) => section.projects))}
@@ -384,6 +388,7 @@ function renderSection(section) {
 
   filters.studio = "";
   filters.year = "";
+  filters.query = "";
   const filterBar = section.projects.length > 1 ? filtersMarkup(section.projects) : "";
   document.querySelector("#main").innerHTML = `
     ${section.projects.length ? indexMarkup(section, "h1", filterBar) : `<h1 class="page-title">${escapeHtml(section.title)}</h1>`}
@@ -402,9 +407,11 @@ async function renderProject(slug) {
   const back = section
     ? `<a class="back" href="#/${section.id}">← ${escapeHtml(section.title)}</a>`
     : `<a class="back" href="#/">← Home</a>`;
+  const credit = [studioName(project.role), project.year].filter(Boolean);
   const paint = (gallery) => {
     document.querySelector("#main").innerHTML = `
       <h1 class="page-title">${escapeHtml(project.title)}</h1>
+      ${credit.length ? `<p class="project-meta">${credit.map((part) => escapeHtml(part)).join(" · ")}</p>` : ""}
       <div class="blocks project-copy">${projectBlocks(project, gallery)}</div>
       ${back}
     `;
@@ -448,16 +455,22 @@ function route() {
 
 const lightbox = document.querySelector(".lightbox");
 const lightboxImage = lightbox.querySelector("img");
+const lightboxCount = lightbox.querySelector(".lightbox-count");
 let lightboxShots = [];
 let lightboxIndex = 0;
 
 let lightboxScroll = 0;
+let swipe = null;
+let ignoreLightboxClick = false;
+const SWIPE_DISTANCE = 56;
 
 function showLightbox(index) {
   lightboxIndex = (index + lightboxShots.length) % lightboxShots.length;
   const shot = lightboxShots[lightboxIndex];
   lightboxImage.src = shot.dataset.full;
   lightboxImage.alt = shot.querySelector("img").alt;
+  lightboxCount.textContent = `${lightboxIndex + 1} / ${lightboxShots.length}`;
+  lightbox.classList.toggle("single", lightboxShots.length < 2);
   if (!lightbox.open) {
     lightboxScroll = window.scrollY;
     lightbox.showModal();
@@ -465,7 +478,72 @@ function showLightbox(index) {
 }
 
 lightbox.addEventListener("close", () => {
+  lightboxImage.style.transform = "";
   window.scrollTo(0, lightboxScroll);
+});
+
+lightbox.addEventListener("pointerdown", (event) => {
+  if (!lightbox.open || event.target.closest("button") || lightboxShots.length < 2) return;
+  swipe = { id: event.pointerId, x: event.clientX, y: event.clientY };
+  lightbox.setPointerCapture(event.pointerId);
+});
+
+lightbox.addEventListener("pointermove", (event) => {
+  if (!swipe || event.pointerId !== swipe.id) return;
+  const dx = event.clientX - swipe.x;
+  const dy = event.clientY - swipe.y;
+  if (Math.abs(dx) < 6 || Math.abs(dx) < Math.abs(dy)) return;
+  lightbox.classList.add("dragging");
+  lightboxImage.style.transform = `translateX(${dx}px)`;
+});
+
+function endSwipe(event, commit) {
+  if (!swipe || event.pointerId !== swipe.id) return;
+  const dx = event.clientX - swipe.x;
+  lightbox.classList.remove("dragging");
+  lightboxImage.style.transform = "";
+  if (commit && Math.abs(dx) > 10) ignoreLightboxClick = true;
+  if (commit && dx <= -SWIPE_DISTANCE) showLightbox(lightboxIndex + 1);
+  else if (commit && dx >= SWIPE_DISTANCE) showLightbox(lightboxIndex - 1);
+  swipe = null;
+}
+
+lightbox.addEventListener("pointerup", (event) => endSwipe(event, true));
+lightbox.addEventListener("pointercancel", (event) => endSwipe(event, false));
+
+let galleryDrag = null;
+let ignoreGalleryClick = false;
+
+document.addEventListener("pointerdown", (event) => {
+  const gallery = event.target.closest(".gallery");
+  if (!gallery || event.pointerType !== "mouse" || event.button !== 0) return;
+  galleryDrag = { id: event.pointerId, x: event.clientX, scroll: gallery.scrollLeft, gallery, moved: false };
+});
+
+document.addEventListener("pointermove", (event) => {
+  if (!galleryDrag || event.pointerId !== galleryDrag.id) return;
+  const dx = event.clientX - galleryDrag.x;
+  if (!galleryDrag.moved && Math.abs(dx) < 8) return;
+  if (!galleryDrag.moved) galleryDrag.gallery.setPointerCapture(event.pointerId);
+  galleryDrag.moved = true;
+  galleryDrag.gallery.classList.add("dragging");
+  galleryDrag.gallery.scrollLeft = galleryDrag.scroll - dx;
+});
+
+function endGalleryDrag(event) {
+  if (!galleryDrag || event.pointerId !== galleryDrag.id) return;
+  if (galleryDrag.moved) ignoreGalleryClick = true;
+  galleryDrag.gallery.classList.remove("dragging");
+  galleryDrag = null;
+}
+
+document.addEventListener("pointerup", endGalleryDrag);
+document.addEventListener("pointercancel", endGalleryDrag);
+
+document.addEventListener("input", (event) => {
+  if (!event.target.matches(".search input")) return;
+  filters.query = event.target.value.trim().toLowerCase();
+  applyFilters({ animate: false });
 });
 
 document.addEventListener("click", (event) => {
@@ -477,11 +555,19 @@ document.addEventListener("click", (event) => {
   }
   const shot = event.target.closest(".shot");
   if (shot) {
+    if (ignoreGalleryClick) {
+      ignoreGalleryClick = false;
+      return;
+    }
     lightboxShots = [...shot.closest(".gallery").querySelectorAll(".shot")];
     showLightbox(lightboxShots.indexOf(shot));
     return;
   }
   if (!lightbox.open) return;
+  if (ignoreLightboxClick) {
+    ignoreLightboxClick = false;
+    return;
+  }
   if (event.target.closest(".lightbox-close") || event.target === lightbox) lightbox.close();
   if (event.target.closest(".lightbox-prev")) showLightbox(lightboxIndex - 1);
   if (event.target.closest(".lightbox-next")) showLightbox(lightboxIndex + 1);
