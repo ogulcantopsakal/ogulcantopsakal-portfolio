@@ -40,6 +40,7 @@ const SITE = {
       "id": "mobile-releases",
       "title": "Mobile Releases",
       "projects": [
+        "merge-bubbles",
         "drop-jelly",
         "gun-assembly",
         "color-guys"
@@ -120,6 +121,13 @@ const SITE = {
     }
   ],
   "projects": {
+    "merge-bubbles": {
+      "title": "Merge Bubbles",
+      "summary": "Merge Bubbles is a word puzzle I developed at Cheer Games. Every bubble carries a word, and the move is to merge words from the same category. Four related words complete the set, clear space on the board, and let the next bubbles drop in.\n\nThe rules are small on purpose. You learn them in a level, then the board fills up and the move limit starts to matter. Later levels ask you to plan several merges ahead so a finished category opens room for the next one, instead of trapping words you still need.",
+      "role": "Cheer Games · Mobile / Puzzle",
+      "year": "2026",
+      "link": "https://apps.apple.com/us/app/merge-bubbles-word-game/id6766297786"
+    },
     "drop-jelly": {
       "title": "Drop Jelly",
       "summary": "Drop Jelly is a colorful, physics-driven puzzle game I developed while working with SuperMesh Games. The core gameplay revolves around dropping and merging jelly blocks to create higher-value pieces, combining spatial strategy with satisfying chain reactions.\n\nI contributed to the full gameplay experience, including core mechanics, level design systems, and progression balancing. The game emphasizes simple-to-learn mechanics with increasing complexity, supported by power-ups and varied level objectives to maintain long-term engagement.\n\nWith its vibrant visuals and responsive feel, Drop Jelly focuses on delivering a polished and addictive puzzle loop built around timing, placement, and strategic planning.",
