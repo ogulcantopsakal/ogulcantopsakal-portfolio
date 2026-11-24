@@ -2,11 +2,11 @@ const EXTS = ["jpg", "jpeg", "png", "webp"];
 
 const ICONS = {
   linkedin:
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.7 3.3A2.2 2.2 0 1 0 4.7 7.7 2.2 2.2 0 0 0 4.7 3.3zM3 9h3.4v12H3zM10 9h3.3v1.7h.1c.5-.9 1.6-1.9 3.4-1.9 3.6 0 4.3 2.4 4.3 5.5V21H17.7v-5.3c0-1.3 0-2.9-1.8-2.9s-2 1.4-2 2.8V21H10z"/></svg>',
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10v7M7 7h.01M11 17v-4a2 2 0 1 1 4 0v4M11 13v4"/></svg>',
   github:
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.5 2 2 6.6 2 12.2c0 4.5 2.9 8.3 6.9 9.6.5.1.7-.2.7-.5v-1.8c-2.8.6-3.4-1.2-3.4-1.2-.4-1.1-1.1-1.4-1.1-1.4-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .9.1-.7.4-1.1.6-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.8 1a9.4 9.4 0 0 1 5 0c2-1.3 2.8-1 2.8-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5 4-1.4 6.9-5.1 6.9-9.6C22 6.6 17.5 2 12 2z"/></svg>',
-  email:
-    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 6.5A2.5 2.5 0 0 1 4.5 4h15A2.5 2.5 0 0 1 22 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 2 17.5v-11zm2.2.3 7.2 5.2c.4.3.9.3 1.2 0l7.2-5.2a.9.9 0 0 0-.3-.8h-15a.9.9 0 0 0-.3.8z"/></svg>',
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18c-4 1.2-4-2-5-2m10 4v-3a3 3 0 0 0-.8-2.2c2.6-.3 5.3-1.3 5.3-5.8a4.4 4.4 0 0 0-1.2-3 4 4 0 0 0-.1-3.1s-1-.3-3.2 1.2a11 11 0 0 0-5.8 0C6.9 2.6 5.9 2.9 5.9 2.9a4 4 0 0 0-.1 3.1 4.4 4.4 0 0 0-1.2 3c0 4.5 2.7 5.5 5.3 5.8A3 3 0 0 0 9 16.8V20"/></svg>',
+  mail:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4 7 8 6 8-6"/></svg>',
 };
 
 function headOk(url) {
@@ -112,18 +112,14 @@ function renderChrome(currentId) {
     })
     .join("");
   nav.innerHTML = sections;
-  document.querySelector(".tagline").textContent =
-    "Unity game developer, building gameplay systems since 2021.";
 
   const social = document.querySelector("#social");
   social.innerHTML = `
-    <a href="${SITE.links.linkedin}" aria-label="LinkedIn">${ICONS.linkedin}</a>
-    <a href="${SITE.links.github}" aria-label="GitHub">${ICONS.github}</a>
-    <a href="mailto:${SITE.links.email}" aria-label="Email">${ICONS.email}</a>
+    <a class="social-link" href="${SITE.links.linkedin}" aria-label="LinkedIn">${ICONS.linkedin}</a>
+    <a class="social-link github" href="${SITE.links.github}" aria-label="GitHub">${ICONS.github}</a>
+    <a class="social-link mail" href="mailto:${SITE.links.email}" aria-label="Email">${ICONS.mail}</a>
   `;
 }
-
-const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function entryMarkup(slug, index) {
   const project = SITE.projects[slug];
@@ -267,7 +263,7 @@ function factsMarkup(sections) {
   return `
     <dl class="facts">
       ${facts
-        .map(([value, label]) => `<div><dt>${escapeHtml(label)}</dt><dd data-count="${value}">${value}</dd></div>`)
+        .map(([value, label]) => `<div><dt>${escapeHtml(label)}</dt><dd>${value}</dd></div>`)
         .join("")}
     </dl>`;
 }
@@ -325,20 +321,6 @@ function applyFilters({ animate = true } = {}) {
   main.classList.add("refiltered");
 }
 
-function countUp() {
-  if (reducedMotion) return;
-  for (const node of document.querySelectorAll("[data-count]")) {
-    const target = Number(node.dataset.count);
-    const start = performance.now();
-    const step = (now) => {
-      const progress = Math.min(1, (now - start) / 900);
-      node.textContent = Math.round(target * (1 - Math.pow(1 - progress, 3)));
-      if (progress < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }
-}
-
 let renderToken = 0;
 
 function renderHome() {
@@ -361,6 +343,7 @@ function renderHome() {
   filters.year = "";
   filters.query = "";
   document.querySelector("#main").innerHTML = `
+    <h1 class="lead">Unity game developer, building gameplay systems since 2021.</h1>
     ${factsMarkup(sections)}
     ${filtersMarkup(sections.flatMap((section) => section.projects))}
     ${indexes}
@@ -370,7 +353,6 @@ function renderHome() {
     </section>
   `;
   loadCovers(sections.flatMap((section) => section.projects));
-  countUp();
 }
 
 function studioName(role) {
