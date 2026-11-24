@@ -60,6 +60,7 @@ html {
   max-width: 100%;
   overflow-x: clip;
   overscroll-behavior-x: none;
+  touch-action: pan-y pinch-zoom;
   scroll-behavior: smooth;
   scroll-padding-top: 80px;
   scrollbar-color: var(--color-border) var(--color-background);
